@@ -1,0 +1,198 @@
+"use client";
+
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from "react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CircleDot, Globe2, House, MapPin, Menu, Newspaper, Printer, Search, X } from "lucide-react";
+import type { Article, Edition } from "@/lib/model";
+import "./newsroom.css";
+
+type Props = { edition: Edition; articles: Article[]; articleId?: string };
+type LinkToStory = (article: Article) => string;
+
+const publicHome = "/newsroom";
+const dateFormat = new Intl.DateTimeFormat("ta-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
+const weekdayFormat = new Intl.DateTimeFormat("ta-IN", { weekday: "long", timeZone: "Asia/Kolkata" });
+
+function formatDate(value: string, weekday = false) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return weekday ? weekdayFormat.format(date) + ", " + dateFormat.format(date) : dateFormat.format(date);
+}
+
+function subscribeLocation(refresh: () => void) {
+  window.addEventListener("hashchange", refresh);
+  window.addEventListener("popstate", refresh);
+  return () => {
+    window.removeEventListener("hashchange", refresh);
+    window.removeEventListener("popstate", refresh);
+  };
+}
+
+function Wordmark() {
+  return <span className="nr-wordmark">
+    <span className="nr-brand-ta"><b>ஷபா</b> நியூஸ்</span>
+    <span className="nr-brand-en" lang="en">SHABA NEWS TAMIL</span>
+  </span>;
+}
+
+function MiniPaper({ article }: { article?: Article }) {
+  return <span className="nr-paper-stack" aria-hidden="true"><span className="nr-sheet">
+    <span className="nr-sheet-name">ஷபா நியூஸ்</span>
+    <span className="nr-sheet-copy"><span>{article?.image && <img src={article.image} alt="" />}</span><i /></span>
+    <i className="nr-sheet-lines" />
+  </span></span>;
+}
+
+function Meta({ article }: { article: Article }) {
+  return <span className="nr-meta">
+    {article.district && <span><MapPin size={13} aria-hidden="true" />{article.district}</span>}
+    {article.district && article.date && <i aria-hidden="true" />}
+    {article.date && <time dateTime={article.date}>{formatDate(article.date)}</time>}
+  </span>;
+}
+
+function moveCover(event: PointerEvent<HTMLAnchorElement>) {
+  if (event.pointerType !== "mouse" || !matchMedia("(prefers-reduced-motion: no-preference)").matches) return;
+  const el = event.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / rect.width - .5;
+  const y = (event.clientY - rect.top) / rect.height - .5;
+  el.style.setProperty("--nr-rx", (-y * 3.5).toFixed(2) + "deg");
+  el.style.setProperty("--nr-ry", (x * 4).toFixed(2) + "deg");
+}
+
+function resetCover(event: PointerEvent<HTMLAnchorElement>) {
+  event.currentTarget.style.removeProperty("--nr-rx");
+  event.currentTarget.style.removeProperty("--nr-ry");
+}
+
+function Cover({ article, href }: { article: Article; href: string }) {
+  return <a href={href} className="nr-cover" onPointerMove={moveCover} onPointerLeave={resetCover} onPointerCancel={resetCover}>
+    {article.image && <img src={article.image} alt="" fetchPriority="high" className="nr-cover-photo" />}
+    <span className="nr-cover-category"><Newspaper size={15} aria-hidden="true" />{article.category || "தலைப்புச் செய்தி"}</span>
+    <span className="nr-cover-body"><Meta article={article} /><span className="nr-cover-title">{article.title}</span>
+      <span className="nr-read">செய்தியை வாசிக்க <ArrowRight size={16} aria-hidden="true" /></span>
+    </span>
+  </a>;
+}
+
+function Digest({ items, link }: { items: Article[]; link: LinkToStory }) {
+  return <div className="nr-digest"><div className="nr-digest-heading"><span className="nr-bars" aria-hidden="true" />செய்திப் பார்வை</div>
+    {items.map((article, i) => <a className="nr-digest-story" href={link(article)} key={article.id}>
+      <div className="nr-digest-text"><span className="nr-kicker"><span className="nr-index">{String(i + 1).padStart(2, "0")}</span>{article.category}</span>
+        <h3>{article.title}</h3><Meta article={article} /></div>
+      {article.image && <span className="nr-digest-image"><img src={article.image} alt="" loading="lazy" /></span>}
+    </a>)}
+  </div>;
+}
+
+function StoryCard({ article, link }: { article: Article; link: LinkToStory }) {
+  return <a className="nr-card" href={link(article)}>
+    {article.image && <span className="nr-card-image"><img src={article.image} alt="" loading="lazy" /></span>}
+    <div className="nr-card-copy"><span className="nr-kicker">{article.category}</span><h3>{article.title}</h3>
+      {article.summary && <p>{article.summary}</p>}<Meta article={article} /></div>
+  </a>;
+}
+
+function StoryPage({ article, others, link, home }: { article: Article; others: Article[]; link: LinkToStory; home: string }) {
+  return <article className="nr-article">
+    <a className="nr-back" href={home}><ArrowLeft size={16} /> முகப்பு</a>
+    <div className="nr-article-heading"><span className="nr-kicker">{article.category}</span><h1>{article.title}</h1>
+      {article.summary && <p>{article.summary}</p>}
+      <div className="nr-byline"><div>{article.author && <strong>{article.author}</strong>}<Meta article={article} /></div>
+        <button onClick={() => window.print()} type="button"><Printer size={17} />அச்சிடுக</button></div>
+    </div>
+    <div className="nr-article-columns"><div className="nr-article-main">
+      {article.image && <figure><img src={article.image} alt={article.title} /></figure>}
+      <div className="nr-body-copy">{article.body.split(/\n+/).filter(Boolean).map((paragraph, i) => <p key={i}>{paragraph}</p>)}</div>
+      {/^https?:\/\//i.test(article.sourceUrl) && <a href={article.sourceUrl} className="nr-source" target="_blank" rel="noreferrer">மூலச் செய்தி <ArrowUpRight size={16} /></a>}
+    </div>{others.length > 0 && <aside aria-label="தொடர்ந்து வாசிக்க"><h2>தொடர்ந்து வாசிக்க</h2>
+      {others.slice(0, 3).map(item => <StoryCard key={item.id} article={item} link={link} />)}
+    </aside>}</div>
+  </article>;
+}
+
+export default function Newsroom({ edition, articles, articleId }: Props) {
+  const location = useSyncExternalStore(subscribeLocation, () => window.location.search + window.location.hash, () => "");
+  const preview = new URLSearchParams(location.split("#")[0]).get("preview") === "draft" ? "?preview=draft" : "";
+  const home = publicHome + preview;
+  const link = (article: Article) => publicHome + "/story/" + encodeURIComponent(article.id) + preview;
+  const sections = edition.sections.filter(section => section.visible);
+  const byId = new Map(articles.map(article => [article.id, article]));
+  const itemsFor = (ids: string[]) => ids.flatMap(id => { const article = byId.get(id); return article ? [article] : []; });
+  const visibleArticles = itemsFor([...new Set(sections.flatMap(section => section.articleIds))]);
+  const districts = [...new Set(visibleArticles.map(article => article.district).filter(Boolean))];
+  const article = articleId ? byId.get(articleId) : undefined;
+  const latestDate = visibleArticles.map(item => item.date).filter(Boolean).sort().at(-1) || article?.date || "";
+  const [ticker, setTicker] = useState(0);
+  const tickerItem = visibleArticles.length > 0 ? visibleArticles[ticker % visibleArticles.length] : undefined;
+  const [panel, setPanel] = useState<"search" | "index">("index");
+  const [query, setQuery] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const previousTrigger = useRef<HTMLElement | null>(null);
+  const searchTerm = query.trim().toLocaleLowerCase("ta-IN");
+  const results = visibleArticles.filter(item => [item.title, item.summary, item.category, item.district, item.author].some(value => value.toLocaleLowerCase("ta-IN").includes(searchTerm)));
+  const sectionLink = (id: string) => home + "#nr-section-" + encodeURIComponent(id);
+  function openPanel(value: "search" | "index", term = "") {
+    if (!dialog.current?.open) previousTrigger.current = document.activeElement as HTMLElement;
+    setPanel(value);
+    setQuery(term);
+    dialog.current?.showModal();
+    if (value === "search") requestAnimationFrame(() => searchInput.current?.focus());
+  }
+  useEffect(() => {
+    const element = dialog.current;
+    return () => element?.close();
+  }, []);
+  return <div className="nr" lang="ta" id="nr-top" data-density={edition.density} style={{ "--nr-accent": edition.accent } as CSSProperties}>
+    <a className="nr-skip" href="#nr-content">செய்திகளுக்குச் செல்ல</a>
+    <header>
+      <div className="nr-utility"><div className="nr-wrap nr-utility-inner">
+        <span><CalendarDays size={13} />{latestDate ? formatDate(latestDate, true) : "தமிழ் இணையப் பதிப்பு"}</span>
+        <span><Globe2 size={14} /><span className="nr-region">தமிழ்நாடு</span><i /><span className="nr-utility-edition">{edition.name}</span></span>
+      </div></div>
+      <div className="nr-wrap nr-mast">
+        <button className="nr-menu" type="button" onClick={() => openPanel("index")} aria-label="பிரிவுகள் மற்றும் மாவட்டங்கள்" aria-haspopup="dialog"><Menu size={19} /><span>பிரிவுகள்</span></button>
+        <a className="nr-logo-link" href={home} aria-label="ஷபா நியூஸ் தமிழ் முகப்பு"><Wordmark /></a>
+        <div className="nr-edition"><MiniPaper article={visibleArticles[0]} /><div><span>இணையப் பதிப்பு</span><strong>{edition.name}</strong></div></div>
+        <button className="nr-mobile-search" aria-label="செய்திகளைத் தேடுக" aria-haspopup="dialog" onClick={() => openPanel("search")}><Search size={21} /></button>
+      </div>
+      <div className="nr-nav-frame"><div className="nr-wrap nr-nav-inner">
+        <nav aria-label="செய்திப் பிரிவுகள்"><a className={"nr-home-nav" + (!articleId && !location.includes("#nr-section-") ? " nr-active" : "")} href={home}><House size={16} />முகப்பு</a>
+          {sections.map(section => <a key={section.id} className={location.endsWith("#nr-section-" + encodeURIComponent(section.id)) ? "nr-active" : ""} href={sectionLink(section.id)}>{section.title}</a>)}
+        </nav><button className="nr-nav-search" aria-haspopup="dialog" onClick={() => openPanel("search")}><Search size={17} /><span>தேடுக</span></button>
+      </div></div>
+    </header>
+    <main className="nr-wrap nr-main" id="nr-content">
+      {articleId ? article ? <StoryPage article={article} others={visibleArticles.filter(item => item.id !== articleId)} link={link} home={home} />
+        : <div className="nr-empty"><h1>செய்தி கிடைக்கவில்லை</h1><a href={home}>முகப்பிற்குத் திரும்புக <ArrowRight size={16} /></a></div> : <>
+        {tickerItem && <div className="nr-ticker"><span className="nr-ticker-label"><CircleDot size={14} />தலைப்புகள்</span>
+          <a href={link(tickerItem)}>{tickerItem.title}</a>
+          {visibleArticles.length > 1 && <div className="nr-ticker-arrows"><button aria-label="முந்தைய தலைப்பு" onClick={() => setTicker((ticker + visibleArticles.length - 1) % visibleArticles.length)}><ChevronLeft size={16} /></button><button aria-label="அடுத்த தலைப்பு" onClick={() => setTicker((ticker + 1) % visibleArticles.length)}><ChevronRight size={16} /></button></div>}
+        </div>}
+        <h1 className="nr-visually-hidden">ஷபா நியூஸ் தமிழ் – {edition.name}</h1>
+        {sections.map(section => {
+          const items = itemsFor(section.articleIds);
+          return <section key={section.id} className={"nr-section nr-type-" + section.type} id={"nr-section-" + section.id}>
+            <div className="nr-section-heading"><h2><i aria-hidden="true" />{section.title}</h2><span className="nr-section-line" /><span className="nr-section-count">{items.length} செய்திகள்</span></div>
+            {!items.length ? <p className="nr-section-empty">இந்தப் பிரிவில் இன்னும் செய்திகள் இல்லை.</p>
+              : section.type === "lead" ? <div className={"nr-lead-grid" + (items.length === 1 ? " nr-single" : "")}>
+                <Cover article={items[0]} href={link(items[0])} />{items.length > 1 && <Digest items={items.slice(1)} link={link} />}</div>
+              : <div className="nr-stories">{items.map(item => <StoryCard key={item.id} article={item} link={link} />)}</div>}
+          </section>;
+        })}
+        {!sections.length && <p className="nr-empty">இந்தப் பதிப்பில் இன்னும் செய்திகள் இல்லை.</p>}
+      </>}
+    </main>
+    <footer><div className="nr-wrap nr-footer"><a href={home} aria-label="ஷபா நியூஸ் தமிழ் முகப்பு"><img className="nr-official-mark" src="/shaba-mark.webp" width="95" height="62" alt="ஷபா நியூஸ் தமிழ்" loading="lazy" /></a><span>{edition.name}</span><a className="nr-top-link" href="#nr-top">மேலே செல்ல <ArrowUp size={16} /></a></div></footer>
+    <dialog ref={dialog} className="nr-dialog" aria-labelledby="nr-dialog-heading" onClose={() => previousTrigger.current?.focus({ preventScroll: true })} onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
+      <div className="nr-dialog-inner"><div className="nr-dialog-title"><h2 id="nr-dialog-heading">{panel === "search" ? "செய்திகளைத் தேடுக" : "செய்தி வழிகாட்டி"}</h2><button aria-label="மூடுக" onClick={() => dialog.current?.close()}><X size={21} /></button></div>
+        {panel === "index" ? <><h3>செய்திப் பிரிவுகள்</h3><div className="nr-section-links">{sections.map(section => <a key={section.id} href={sectionLink(section.id)} onClick={() => dialog.current?.close()}>{section.title}<ArrowDownRight size={17} /></a>)}</div>
+          {districts.length > 0 && <><h3>மாவட்டச் செய்திகள்</h3><div className="nr-districts">{districts.map(district => <button onClick={() => openPanel("search", district)} key={district}><MapPin size={14} />{district}</button>)}</div></>}
+        </> : <><label className="nr-searchbox"><Search size={20} /><input ref={searchInput} value={query} onChange={e => setQuery(e.target.value)} aria-label="செய்தி, மாவட்டம் அல்லது பிரிவு" placeholder="செய்தி, மாவட்டம் அல்லது பிரிவு…" /></label>
+          <p className="nr-result-count" aria-live="polite">{results.length} செய்திகள்</p><div className="nr-results">{results.map(item => <a key={item.id} href={link(item)}><div><span className="nr-kicker">{item.category} · {item.district}</span><strong>{item.title}</strong></div><ArrowUpRight size={17} /></a>)}</div>
+          {!results.length && <p className="nr-section-empty">பொருத்தமான செய்திகள் கிடைக்கவில்லை. வேறொரு சொல்லைத் தேடவும்.</p>}</>}
+      </div>
+    </dialog>
+  </div>;
+}

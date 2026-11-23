@@ -14,8 +14,9 @@ export async function generateMetadata({ params }: { params: StoryParams }) {
 
 export default async function Story({ params, searchParams }: {
   params: StoryParams;
-  searchParams: Promise<{ preview?: string }>;
+  searchParams: Promise<{ preview?: string; full?: string }>;
 }) {
   const { id } = await params;
-  return <EditionPage story={id} draft={(await searchParams).preview === 'draft'} />;
+  const query = await searchParams;
+  return <EditionPage story={id} draft={query.preview === 'draft'} full={query.full === '1'} />;
 }

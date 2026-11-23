@@ -5,7 +5,7 @@ import { publishedIssue } from '../lib/model';
 import { issue, studio } from '../lib/storage';
 import Newsroom from './Newsroom';
 
-export default async function EditionPage({ story, draft }: { story?: string; draft: boolean }) {
+export default async function EditionPage({ story, draft, full = false }: { story?: string; draft: boolean; full?: boolean }) {
   if (draft) {
     const path = story ? `/newsroom/story/${encodeURIComponent(story)}` : '/newsroom';
     await requireEditorPage(path + '?preview=draft');
@@ -17,6 +17,6 @@ export default async function EditionPage({ story, draft }: { story?: string; dr
 
   return <>
     {draft && <aside lang="en" className="draft-strip">Draft preview · Only editors can see these changes <Link href="/admin" prefetch={false}>Return to desk</Link></aside>}
-    <Newsroom {...data} articleId={story} />
+    <Newsroom {...data} articleId={story} full={full} />
   </>;
 }

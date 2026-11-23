@@ -27,6 +27,14 @@ test('only published stories and their photos are readable without editor sign-i
   const request = (path, init = {}) => fetch(origin + path, { redirect: 'manual', ...init });
 
   assert.equal((await request('/newsroom')).status, 200);
+  const seededStory = await (await request('/newsroom/story/voc-remembrance')).text();
+  const renderedBody = html => html.match(/<div class="nr-body-copy">([\s\S]*?)<\/div>/)?.[1] ?? '';
+  assert.match(seededStory, /href="\/newsroom\/story\/voc-remembrance\?full=1"/);
+  assert.doesNotMatch(renderedBody(seededStory), /ஆகியோர் கலந்து கொண்டு/);
+  const completeStory = await (await request('/newsroom/story/voc-remembrance?full=1')).text();
+  assert.match(renderedBody(completeStory), /ஆகியோர் கலந்து கொண்டு/);
+  assert.doesNotMatch(completeStory, /மூலச் செய்தி/);
+  assert.doesNotMatch(seededStory, /href="https:\/\/www\.shabanewstamil\.com\/2026\/11\/90\.html"/);
   assert.equal((await request('/api/studio')).status, 401);
   const gate = await request('/admin');
   assert.equal(gate.status, 307);

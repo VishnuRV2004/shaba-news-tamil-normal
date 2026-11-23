@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
-import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Bookmark, BookmarkCheck, CalendarDays, Check, ChevronLeft, ChevronRight, CircleDot, Globe2, House, MapPin, Menu, Newspaper, Printer, Search, Share2, Type, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Bookmark, BookmarkCheck, CalendarDays, Check, ChevronLeft, ChevronRight, CircleDot, Globe2, House, MapPin, Menu, Newspaper, Printer, Search, Share2, Type, X } from "lucide-react";
 import type { Article, Edition } from "@/lib/model";
 import "./newsroom.css";
 
 type Props = { edition: Edition; articles: Article[]; articleId?: string; full?: boolean };
 type LinkToStory = (article: Article, full?: boolean) => string;
 
-const publicHome = "/newsroom";
+const publicBase = process.env.NEXT_PUBLIC_SHABA_BASE_PATH || "";
+const publicHome = publicBase + "/newsroom";
+const publicAsset = (path: string) => path.startsWith("/") ? publicBase + path : path;
 const dateFormat = new Intl.DateTimeFormat("ta-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kolkata" });
 const weekdayFormat = new Intl.DateTimeFormat("ta-IN", { weekday: "long", timeZone: "Asia/Kolkata" });
 
@@ -44,7 +46,7 @@ function Meta({ article }: { article: Article }) {
 
 function Cover({ article, href }: { article: Article; href: string }) {
   return <a href={href} className="nr-cover">
-    {article.image && <img src={article.image} alt="" fetchPriority="high" className="nr-cover-photo" />}
+    {article.image && <img src={publicAsset(article.image)} alt="" fetchPriority="high" className="nr-cover-photo" />}
     <span className="nr-cover-category"><Newspaper size={15} aria-hidden="true" />{article.category || "தலைப்புச் செய்தி"}</span>
     <span className="nr-cover-body"><Meta article={article} /><span className="nr-cover-title">{article.title}</span>
       <span className="nr-read">செய்தியை வாசிக்க <ArrowRight size={16} aria-hidden="true" /></span>
@@ -57,14 +59,14 @@ function Digest({ items, link }: { items: Article[]; link: LinkToStory }) {
     {items.map((article, i) => <a className="nr-digest-story" href={link(article)} key={article.id}>
       <div className="nr-digest-text"><span className="nr-kicker"><span className="nr-index">{String(i + 1).padStart(2, "0")}</span>{article.category}</span>
         <h3>{article.title}</h3><Meta article={article} /></div>
-      {article.image && <span className="nr-digest-image"><img src={article.image} alt="" loading="lazy" /></span>}
+      {article.image && <span className="nr-digest-image"><img src={publicAsset(article.image)} alt="" loading="lazy" /></span>}
     </a>)}
   </div>;
 }
 
 function StoryCard({ article, link }: { article: Article; link: LinkToStory }) {
   return <a className="nr-card" href={link(article)}>
-    {article.image && <span className="nr-card-image"><img src={article.image} alt="" loading="lazy" /></span>}
+    {article.image && <span className="nr-card-image"><img src={publicAsset(article.image)} alt="" loading="lazy" /></span>}
     <div className="nr-card-copy"><span className="nr-kicker">{article.category}</span><h3>{article.title}</h3>
       {article.summary && <p>{article.summary}</p>}<Meta article={article} /></div>
   </a>;
@@ -73,27 +75,12 @@ function StoryCard({ article, link }: { article: Article; link: LinkToStory }) {
 function StoryPage({ article, others, link, home, full, saved, onSave }: { article: Article; others: Article[]; link: LinkToStory; home: string; full: boolean; saved: boolean; onSave: () => void }) {
   const [expanded, setExpanded] = useState(full);
   const [largeText, setLargeText] = useState(false);
-  const [canListen, setCanListen] = useState(false);
-  const [listening, setListening] = useState(false);
   const [copied, setCopied] = useState(false);
-  const speech = useRef<SpeechSynthesisUtterance | null>(null);
   const paragraphs = article.body.split(/\n+/).filter(Boolean);
   const preview = paragraphs.find(paragraph => paragraph.length > 80) || paragraphs[0] || article.summary;
   useEffect(() => {
-    setCanListen('speechSynthesis' in window);
-    return () => { window.speechSynthesis?.cancel(); };
+    if (new URLSearchParams(window.location.search).get('full') === '1') setExpanded(true);
   }, []);
-  function listen() {
-    if (listening) { window.speechSynthesis.cancel(); setListening(false); return; }
-    const utterance = new SpeechSynthesisUtterance(article.title + '. ' + article.body);
-    utterance.lang = 'ta-IN';
-    utterance.rate = 0.9;
-    utterance.onend = utterance.onerror = () => { setListening(false); speech.current = null; };
-    speech.current = utterance;
-    setExpanded(true);
-    window.speechSynthesis.speak(utterance);
-    setListening(true);
-  }
   async function share() {
     try {
       if (navigator.share) await navigator.share({ title: article.title, url: window.location.href });
@@ -112,13 +99,12 @@ function StoryPage({ article, others, link, home, full, saved, onSave }: { artic
       <div className="nr-reader-tools" aria-label="வாசிப்பு கருவிகள்">
         <button type="button" onClick={onSave} aria-pressed={saved}>{saved ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}{saved ? 'சேமிக்கப்பட்டது' : 'சேமிக்க'}</button>
         <button type="button" onClick={share}>{copied ? <Check size={17} /> : <Share2 size={17} />}{copied ? 'இணைப்பு நகலானது' : 'பகிர்'}</button>
-        {canListen && <button type="button" onClick={listen} aria-pressed={listening}>{listening ? <VolumeX size={17} /> : <Volume2 size={17} />}{listening ? 'நிறுத்து' : 'கேட்க'}</button>}
         <button type="button" onClick={() => setLargeText(!largeText)} aria-pressed={largeText}><Type size={17} />எழுத்து அளவு</button>
         <button type="button" onClick={printStory}><Printer size={17} />அச்சிடு</button>
       </div>
     </div>
     <div className="nr-article-columns"><div className="nr-article-main">
-      {article.image && <figure><img src={article.image} alt={article.title} /></figure>}
+      {article.image && <figure><img src={publicAsset(article.image)} alt={article.title} /></figure>}
       <div className={"nr-body-copy" + (largeText ? " nr-large-text" : "")}>{expanded ? paragraphs.map((paragraph, i) => <p key={i}>{paragraph}</p>) : preview && <p className="nr-preview-copy">{preview}</p>}</div>
       {!expanded && paragraphs.length > 0 && <a href={link(article, true)} className="nr-source" onClick={event => { event.preventDefault(); setExpanded(true); }}>மூலச் செய்தி <ArrowUpRight size={16} /></a>}
     </div>{others.length > 0 && <aside aria-label="தொடர்ந்து வாசிக்க"><h2>தொடர்ந்து வாசிக்க</h2>
@@ -217,7 +203,7 @@ export default function Newsroom({ edition, articles, articleId, full = false }:
         {!sections.length && <p className="nr-empty">இந்தப் பதிப்பில் இன்னும் செய்திகள் இல்லை.</p>}
       </>}
     </main>
-    <footer><div className="nr-wrap nr-footer"><a href={home} aria-label="ஷபா நியூஸ் தமிழ் முகப்பு"><img className="nr-official-mark" src="/shaba-mark.webp" width="95" height="62" alt="ஷபா நியூஸ் தமிழ்" loading="lazy" /></a><span>{edition.name}</span><a className="nr-top-link" href="#nr-top">மேலே செல்ல <ArrowUp size={16} /></a></div></footer>
+    <footer><div className="nr-wrap nr-footer"><a href={home} aria-label="ஷபா நியூஸ் தமிழ் முகப்பு"><img className="nr-official-mark" src={publicAsset("/shaba-mark.webp")} width="95" height="62" alt="ஷபா நியூஸ் தமிழ்" loading="lazy" /></a><span>{edition.name}</span><a className="nr-top-link" href="#nr-top">மேலே செல்ல <ArrowUp size={16} /></a></div></footer>
     <dialog ref={dialog} className="nr-dialog" aria-labelledby="nr-dialog-heading" onClose={() => previousTrigger.current?.focus({ preventScroll: true })} onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
       <div className="nr-dialog-inner"><div className="nr-dialog-title"><h2 id="nr-dialog-heading">{panel === "search" ? "செய்திகளைத் தேடுக" : panel === "saved" ? "சேமித்த செய்திகள்" : "செய்தி வழிகாட்டி"}</h2><button aria-label="மூடுக" onClick={() => dialog.current?.close()}><X size={21} /></button></div>
         {panel === "index" ? <><h3>செய்திப் பிரிவுகள்</h3><div className="nr-section-links">{sections.map(section => <a key={section.id} href={sectionLink(section.id)} onClick={() => dialog.current?.close()}>{section.title}<ArrowDownRight size={17} /></a>)}</div>

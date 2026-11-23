@@ -4,6 +4,8 @@ Newsroom is the digital edition of Shaba News Tamil. It leads with the day's mai
 
 [Open the public Newsroom preview](https://shaba-tamil-editions.ideastonetech.chatgpt.site/newsroom)
 
+[Open the live GitHub Pages edition](https://surega04-d.github.io/shaba-news-tamil-normal/). It is a static copy of the public reader and needs no running local server. The editor, uploads and SQLite publication API run only on the server-backed app. The Pages workflow rebuilds the public edition from the checked-in archive.
+
 ## Run locally
 
 Install Node.js 22.13 or later, then run:
@@ -17,7 +19,7 @@ Open [the local reader](http://localhost:3000/newsroom). The site starts with Ta
 
 The initial archive text comes from Shaba's public Blogger feed. Story pages show a few lines; **மூலச் செய்தி** expands the complete article on the same page. To refresh those seeded articles from the original site, run `npm run import:archive` and review the change to `lib/archive.json` before deploying. This is an explicit import, not a live request on every reader visit. Newly published stories can be written directly in the editorial desk.
 
-Readers can search article text, open district shortcuts, save stories on their device, share links, enlarge article text, and use browser read aloud when supported. Saved stories use browser storage and do not sync across devices.
+Readers can search article text, open district shortcuts, save stories on their device, share links, and enlarge article text. Saved stories use browser storage and do not sync across devices.
 
 ## Public site crawler
 
